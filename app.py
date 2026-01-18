@@ -7,36 +7,40 @@ st.set_page_config(page_title="AI Video Clipper Pro", layout="wide")
 API_KEY = st.secrets.get("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
-st.title("🎬 مصنع الفيديوهات (النسخة المضادة لـ Bot Detection)")
+st.title("🎬 مصنع الفيديوهات (نسخة تخطي التنسيق)")
 
 yt_url = st.text_input("🔗 ضع رابط يوتيوب هنا:")
 
 if yt_url:
     if st.button("🚀 ابدأ العمل"):
         try:
-            with st.status("🛠️ محاولة تخطي فحص الروبوت...", expanded=True) as status:
+            with st.status("🛠️ جاري البحث عن تنسيق متاح...", expanded=True) as status:
                 if os.path.exists("temp_audio.mp3"): os.remove("temp_audio.mp3")
                 
-                # إعدادات الهروب من فحص "Sign in to confirm"
+                # إعدادات بتجيب أي حاجة شغالة (Video + Audio) وتحولها
                 ydl_opts = {
-                    'format': 'bestaudio/best',
-                    'outtmpl': 'temp_audio.%(ext)s',
+                    'format': 'best', # سحب أفضل نسخة مدمجة (أضمن طريقة)
+                    'outtmpl': 'temp_video.%(ext)s',
                     'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
                     'no_check_certificate': True,
-                    # السطر السحري: إيهام يوتيوب أننا متصفح سفاري على آيفون (أقل حماية)
-                    'extractor_args': {'youtube': {'player_client': ['web_safari'], 'po_token': ['web+OAb9S...']}},
-                    'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-                    'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '128'}],
+                    'quiet': False,
+                    # استخدام متصفح ويب عادي (Chrome) بدل iOS
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 }
 
-                status.write("📡 جاري محاولة سحب الصوت بصيغة Safari...")
+                status.write("📡 جاري محاولة سحب البيانات...")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([yt_url])
                 
-                if os.path.exists("temp_audio.mp3") and os.path.getsize("temp_audio.mp3") > 1000:
-                    status.write("✅ نجحنا في سحب الصوت!")
+                # تحويل الفيديو المسحوب لصوت MP3 يدوياً عشان نضمن الجودة لـ Gemini
+                status.write("🎵 جاري استخراج الصوت...")
+                video_file = [f for f in os.listdir('.') if f.startswith('temp_video')][0]
+                subprocess.run(f'ffmpeg -i "{video_file}" -q:a 0 -map a temp_audio.mp3 -y', shell=True)
+
+                if os.path.exists("temp_audio.mp3"):
+                    status.write("✅ تم تجهيز الصوت للتحليل")
                 else:
-                    raise Exception("يوتيوب مازال يطلب تسجيل الدخول. الكوكيز غير صالحة.")
+                    raise Exception("فشل استخراج الصوت. يوتيوب حظر هذا التنسيق أيضاً.")
 
                 status.write("🧠 جاري التحليل بـ Gemini...")
                 audio_upload = client.files.upload(path="temp_audio.mp3")
@@ -52,8 +56,7 @@ if yt_url:
                 if times:
                     for i, (start_t, end_t) in enumerate(times, 1):
                         out_name = f"clip_{i}.mp4"
-                        cookie_cmd = "--cookies cookies.txt" if os.path.exists('cookies.txt') else ""
-                        cmd = f'ffmpeg -ss {start_t} -to {end_t} -i "$(yt-dlp {cookie_cmd} -g -f \"best\" {yt_url})" -c copy {out_name} -y'
+                        cmd = f'ffmpeg -ss {start_t} -to {end_t} -i "{video_file}" -c copy {out_name} -y'
                         subprocess.run(cmd, shell=True)
                         if os.path.exists(out_name):
                             with open(out_name, "rb") as f:
