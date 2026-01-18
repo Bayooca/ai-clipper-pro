@@ -1,4 +1,4 @@
+yt-dlp>=2025.01.15
 google-genai
-yt-dlp
 ffmpeg-python
 streamlit
