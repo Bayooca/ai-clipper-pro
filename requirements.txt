@@ -1,0 +1,4 @@
+google-genai
+yt-dlp>=2024.08.01
+ffmpeg-python
+streamlit
