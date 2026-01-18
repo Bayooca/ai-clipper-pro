@@ -7,34 +7,33 @@ st.set_page_config(page_title="AI Video Clipper Pro", layout="wide")
 API_KEY = st.secrets.get("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
-st.title("🎬 مصنع الفيديوهات (نسخة تخطي الشفرة)")
+st.title("🎬 مصنع الفيديوهات (نسخة تخطي الشفرات)")
 
 yt_url = st.text_input("🔗 ضع رابط يوتيوب هنا:")
 
 if yt_url:
     if st.button("🚀 ابدأ العمل"):
         try:
-            with st.status("🛠️ جاري كسر شفرة يوتيوب...", expanded=True) as status:
+            with st.status("🛠️ جاري الالتفاف على شفرة يوتيوب...", expanded=True) as status:
                 if os.path.exists("temp_audio.mp3"): os.remove("temp_audio.mp3")
                 
-                # إعدادات إجبار يوتيوب على استخدام "تطبيق الأندرويد" (أسهل في التشفير)
+                # إعدادات إجبار يوتيوب على معاملتنا كـ "تلفزيون ذكي" لتجنب الـ Signature
                 ydl_opts = {
                     'format': 'bestaudio/best',
                     'outtmpl': 'temp_audio.%(ext)s',
                     'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
                     'no_check_certificate': True,
-                    # السطر السحري لتجنب Signature solving failed
-                    'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-                    'user_agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; en_US; Pixel 8 Pro) gzip',
+                    # السطر اللي هيحل المشكلة: استخدام عميل الـ TV
+                    'extractor_args': {'youtube': {'player_client': ['tv', 'web']}},
                     'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '128'}],
                 }
 
-                status.write("📡 جاري محاولة سحب الصوت بنظام Android Client...")
+                status.write("📡 جاري محاولة سحب الصوت بنظام TV Client...")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([yt_url])
                 
                 if not os.path.exists("temp_audio.mp3") or os.path.getsize("temp_audio.mp3") < 1000:
-                    raise Exception("يوتيوب رفض الشفرة. تأكد من تحديث ملف cookies.txt بصيغة Netscape.")
+                    raise Exception("يوتيوب رفض الشفرة حتى مع عميل التلفزيون. تأكد من تحديث ملف cookies.txt.")
 
                 status.write("🧠 جاري التحليل بـ Gemini...")
                 audio_upload = client.files.upload(path="temp_audio.mp3")
@@ -50,8 +49,8 @@ if yt_url:
                 if times:
                     for i, (start_t, end_t) in enumerate(times, 1):
                         out_name = f"clip_{i}.mp4"
-                        # القص المباشر باستخدام نفس "هوية" الأندرويد
-                        cmd = f'ffmpeg -ss {start_t} -to {end_t} -i "$(yt-dlp --extractor-args youtube:player_client=android -g -f \"best\" {yt_url})" -c copy {out_name} -y'
+                        # القص المباشر باستخدام نفس "هوية" التلفزيون
+                        cmd = f'ffmpeg -ss {start_t} -to {end_t} -i "$(yt-dlp --extractor-args youtube:player_client=tv -g -f \"best\" {yt_url})" -c copy {out_name} -y'
                         subprocess.run(cmd, shell=True)
                         if os.path.exists(out_name):
                             with open(out_name, "rb") as f:
