@@ -15,25 +15,27 @@ yt_url = st.text_input("🔗 ضع رابط يوتيوب هنا:")
 if yt_url:
     if st.button("🚀 ابدأ العمل"):
         try:
-            with st.status("🛠️ جاري محاولة سحب الفيديو...", expanded=True) as status:
+            with st.status("🛠️ جاري فحص الرابط وسحب البيانات...", expanded=True) as status:
                 
-                # إعدادات لسحب الصوت بأخف طريقة ممكنة لتجنب الحظر
+                # إعدادات "الجوكر" - بتجيب أفضل صوت متاح مهما كانت صيغته
                 ydl_opts = {
-                    'format': 'wa* / ba*', # اختيار أقل جودة صوت متاحة للهروب من الفحص
+                    'format': 'bestaudio/best', # السطر المنقذ: هات أفضل المتاح
                     'outtmpl': 'temp_audio.%(ext)s',
                     'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
                     'no_check_certificate': True,
                     'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0 Safari/537.36',
-                    'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '64'}],
+                    'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '128'}],
                 }
 
-                status.write("📡 جاري محاولة سحب المقطع...")
+                status.write("📡 جاري محاولة التحميل...")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([yt_url])
                 
-                # فحص هل الملف موجود فعلاً وله مساحة؟
-                if not os.path.exists("temp_audio.mp3") or os.path.getsize("temp_audio.mp3") == 0:
-                    raise Exception("يوتيوب رفض إرسال البيانات (Empty File). جرب رابط فيديو آخر أو حدث ملف cookies.txt.")
+                # فحص مساحة الملف للتأكد إنه مش فاضي
+                if os.path.exists("temp_audio.mp3") and os.path.getsize("temp_audio.mp3") > 0:
+                    status.write(f"✅ تم سحب الصوت بنجاح ({round(os.path.getsize('temp_audio.mp3')/1024/1024, 2)} MB)")
+                else:
+                    raise Exception("الملف الناتج فارغ، يوتيوب رفض إرسال البيانات لهذا التنسيق.")
 
                 status.write("🧠 جاري التحليل بـ Gemini...")
                 audio_upload = client.files.upload(path="temp_audio.mp3")
@@ -49,10 +51,9 @@ if yt_url:
                 if times:
                     for i, (start_t, end_t) in enumerate(times, 1):
                         out_name = f"clip_{i}.mp4"
-                        # أمر القص المباشر باستخدام يوتيوب مباشرة
-                        ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0 Safari/537.36'
+                        # القص باستخدام رابط البث المباشر مع التنسيق التلقائي
                         cookie_cmd = "--cookies cookies.txt" if os.path.exists('cookies.txt') else ""
-                        cmd = f'ffmpeg -ss {start_t} -to {end_t} -i "$(yt-dlp {cookie_cmd} --user-agent \'{ua}\' -g -f \"best\" {yt_url})" -c copy {out_name} -y'
+                        cmd = f'ffmpeg -ss {start_t} -to {end_t} -i "$(yt-dlp {cookie_cmd} -g -f \"best\" {yt_url})" -c copy {out_name} -y'
                         subprocess.run(cmd, shell=True)
                         if os.path.exists(out_name):
                             with open(out_name, "rb") as f:
@@ -61,3 +62,4 @@ if yt_url:
                 status.update(label="✅ تمت العملية بنجاح!", state="complete")
         except Exception as e:
             st.error(f"❌ خطأ: {str(e)}")
+            st.info("نصيحة: إذا استمر الخطأ، جرب رابط فيديو آخر (قناة مختلفة) للتأكد من أن الحظر ليس شاملاً للسيرفر.")
